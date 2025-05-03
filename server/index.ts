@@ -1,63 +1,54 @@
 import express from "express";
-import cors from "cors";
 import dotenv from "dotenv";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import multer from "multer";
-import path from "path";
+import { PrismaClient } from "@prisma/client";
 
-// Load env vars
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+// Load environment variables from .env
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const prisma = new PrismaClient();
 
-app.use(cors());
 app.use(express.json());
 
-// MinIO config
-const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || "http://localhost:9000";
-const MINIO_ACCESS_KEY = process.env.MINIO_ROOT_USER || process.env.MINIO_ACCESS_KEY || "minioadmin";
-const MINIO_SECRET_KEY = process.env.MINIO_ROOT_PASSWORD || process.env.MINIO_SECRET_KEY || "minioadmin";
-const MINIO_BUCKET = process.env.MINIO_BUCKET || "idhosting-docs";
-
-const s3 = new S3Client({
-  endpoint: MINIO_ENDPOINT,
-  region: "us-east-1",
-  credentials: {
-    accessKeyId: MINIO_ACCESS_KEY,
-    secretAccessKey: MINIO_SECRET_KEY,
-  },
-  forcePathStyle: true,
-});
-
-const upload = multer();
-
 app.get("/", (req, res) => {
-  res.send("Express backend is running!");
+  res.json({ message: "API is running!" });
 });
 
-app.post("/api/upload-image", upload.single("image"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-  const file = req.file;
-  const filename = `${Date.now()}-${file.originalname}`;
+// Example: Get all users
+app.get("/users", async (req, res) => {
+  const users = await prisma.user.findMany();
+  res.json(users);
+});
+
+// Example: Create a user
+app.post("/users", async (req, res) => {
+  const { name, email, password } = req.body;
   try {
-    const command = new PutObjectCommand({
-      Bucket: MINIO_BUCKET,
-      Key: filename,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-      ACL: "public-read",
+    const user = await prisma.user.create({
+      data: { name, email, password },
     });
-    await s3.send(command);
-    const imageUrl = `${MINIO_ENDPOINT.replace(/:\\d+$/, ':9000')}/${MINIO_BUCKET}/${filename}`;
-    res.json({ url: imageUrl });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to upload image" });
+    res.status(201).json(user);
+  } catch (error) {
+    res.status(400).json({ error: "Could not create user", details: error });
   }
 });
 
+// Update user role
+app.put("/api/users/:id", async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: Number(id) },
+      data: { role },
+    });
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(400).json({ error: "Could not update user role", details: error });
+  }
+});
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Backend listening on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });

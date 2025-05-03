@@ -25,6 +25,7 @@ import ReactMarkdown from "react-markdown";
 import { slugify } from "../../lib/utils";
 import { DocPage } from "../../../types/docs";
 import { ImagePlus } from "lucide-react";
+import axios from "axios";
 
 interface PageEditorProps {
   isNewPage?: boolean;
@@ -34,7 +35,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const { pages, categories, addPage, updatePage } = useDocsContext();
-  
+
   const [activeTab, setActiveTab] = useState<string>("edit");
   const [pageData, setPageData] = useState<Partial<DocPage>>({
     title: "",
@@ -45,10 +46,10 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
     excerpt: "",
     author: "",
   });
-  
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imageUploading, setImageUploading] = useState(false);
-  
+
   useEffect(() => {
     if (!isNewPage && pageId) {
       const page = pages.find((p) => p.id === pageId);
@@ -59,63 +60,63 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
       }
     }
   }, [isNewPage, pageId, pages, navigate]);
-  
+
   useEffect(() => {
-    if (!pageData.slug || (pageData.slug === slugify(pageData.title || ""))) {
+    if (!pageData.slug || pageData.slug === slugify(pageData.title || "")) {
       setPageData((prev) => ({
         ...prev,
         slug: slugify(prev.title || ""),
       }));
     }
   }, [pageData.title]);
-  
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setPageData((prev) => ({ ...prev, [name]: value }));
-    
+
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
-  
+
   const handleSelectChange = (name: string, value: string) => {
     setPageData((prev) => ({ ...prev, [name]: value }));
-    
+
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
-  
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!pageData.title?.trim()) {
       newErrors.title = "Title is required";
     }
-    
+
     if (!pageData.slug?.trim()) {
       newErrors.slug = "Slug is required";
     }
-    
+
     if (!pageData.categoryId) {
       newErrors.categoryId = "Category is required";
     }
-    
+
     if (!pageData.content?.trim()) {
       newErrors.content = "Content is required";
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validate()) return;
-    
+
     try {
       if (isNewPage) {
         addPage({
@@ -130,13 +131,13 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
       } else if (pageId) {
         updatePage(pageId, pageData);
       }
-      
+
       navigate("/admin/pages");
     } catch (error) {
       console.error("Failed to save page:", error);
     }
   };
-  
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log("handleImageUpload");
     const file = e.target.files?.[0];
@@ -148,56 +149,58 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
       // Upload image to backend
       const formData = new FormData();
       formData.append("image", file);
-      // Update this URL to your deployed backend endpoint if needed
-      const UPLOAD_API_URL = process.env.REACT_APP_UPLOAD_API_URL || "http://localhost:3001/api/upload-image";
-      const response = await fetch(UPLOAD_API_URL, {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Failed to upload image");
-      const data = await response.json();
+      const UPLOAD_API_URL =
+        import.meta.env.VITE_UPLOAD_API_URL ||
+        "http://localhost:3001/api/upload-image";
+      const response = await axios.post(UPLOAD_API_URL, formData);
+
+      const data = response.data;
       const imageUrl = data.url;
 
-      const textarea = document.querySelector('textarea[name="content"]') as HTMLTextAreaElement;
+      const textarea = document.querySelector(
+        'textarea[name="content"]'
+      ) as HTMLTextAreaElement;
       const imageMarkdown = `\n![${file.name}](${imageUrl})\n`;
 
       if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const text = textarea.value;
-        const newContent = text.substring(0, start) + imageMarkdown + text.substring(end);
-        setPageData(prev => ({
+        const newContent =
+          text.substring(0, start) + imageMarkdown + text.substring(end);
+        setPageData((prev) => ({
           ...prev,
           content: newContent,
         }));
       } else {
-        setPageData(prev => ({
+        setPageData((prev) => ({
           ...prev,
           content: (prev.content || "") + imageMarkdown,
         }));
       }
 
       if (errors.content) {
-        setErrors(prev => ({ ...prev, content: "" }));
+        setErrors((prev) => ({ ...prev, content: "" }));
       }
     } catch (error) {
       console.error("Failed to handle image:", error);
+      alert(`Image upload failed: ${error.message}`);
     } finally {
       setImageUploading(false);
     }
   };
-  
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 py-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">
           {isNewPage ? "Create New Page" : "Edit Page"}
         </h1>
-        
+
         <div className="space-x-2">
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => navigate("/admin/pages")}
           >
             Cancel
@@ -207,7 +210,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
           </Button>
         </div>
       </div>
-      
+
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <Card>
@@ -232,7 +235,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                     <p className="text-sm text-destructive">{errors.title}</p>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="slug">Slug</Label>
                   <div className="flex items-center space-x-2">
@@ -252,7 +255,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                     <p className="text-sm text-destructive">{errors.slug}</p>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="excerpt">Excerpt</Label>
                   <Input
@@ -263,8 +266,12 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                     placeholder="Short description of the page"
                   />
                 </div>
-                
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+
+                <Tabs
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                  className="mt-6"
+                >
                   <TabsList className="flex justify-between">
                     <div className="flex">
                       <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -284,14 +291,16 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                         variant="outline"
                         size="sm"
                         disabled={imageUploading}
-                        onClick={() => document.getElementById('image-upload')?.click()}
+                        onClick={() =>
+                          document.getElementById("image-upload")?.click()
+                        }
                       >
                         <ImagePlus className="h-4 w-4 mr-2" />
                         Add Image
                       </Button>
                     </div>
                   </TabsList>
-                  
+
                   <TabsContent value="edit" className="p-0">
                     <Textarea
                       id="content"
@@ -302,7 +311,9 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                       className="min-h-[400px] font-mono"
                     />
                     {errors.content && (
-                      <p className="text-sm text-destructive mt-2">{errors.content}</p>
+                      <p className="text-sm text-destructive mt-2">
+                        {errors.content}
+                      </p>
                     )}
                   </TabsContent>
                   <TabsContent value="preview" className="p-0">
@@ -321,7 +332,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
             </CardContent>
           </Card>
         </div>
-        
+
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -332,7 +343,9 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                 <Label htmlFor="category">Category</Label>
                 <Select
                   value={pageData.categoryId || ""}
-                  onValueChange={(value) => handleSelectChange("categoryId", value)}
+                  onValueChange={(value) =>
+                    handleSelectChange("categoryId", value)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a category" />
@@ -346,10 +359,12 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                   </SelectContent>
                 </Select>
                 {errors.categoryId && (
-                  <p className="text-sm text-destructive">{errors.categoryId}</p>
+                  <p className="text-sm text-destructive">
+                    {errors.categoryId}
+                  </p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="order">Display Order</Label>
                 <Input
@@ -361,7 +376,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                   onChange={handleChange}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="author">Author</Label>
                 <Input
@@ -379,9 +394,7 @@ export function PageEditor({ isNewPage = false }: PageEditorProps) {
                   Preview
                 </Button>
               )}
-              <Button type="submit">
-                {isNewPage ? "Create" : "Save"}
-              </Button>
+              <Button type="submit">{isNewPage ? "Create" : "Save"}</Button>
             </CardFooter>
           </Card>
         </div>
